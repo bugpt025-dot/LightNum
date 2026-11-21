@@ -2,7 +2,7 @@
 
 A native Luau arbitrary-magnitude number library for Roblox (`v1.9.1`).
 
-LightNum provides full 53-bit IEEE-754 mantissa precision up to $10^{(10^{308})}$ and hyper-layered representation up to $10\uparrow\uparrow(2^{1024})$. It is designed for incremental games, simulators, and high-throughput numeric workloads, while maintaining 100% wire and `OrderedDataStore` compatibility with GammaNum.
+LightNum provides full 53-bit IEEE-754 mantissa precision up to `10^(10^308)` and hyper-layered representation up to `10^^(2^1024)`. It is designed for incremental games, simulators, and high-throughput numeric workloads, while maintaining 100% wire and `OrderedDataStore` compatibility with GammaNum.
 
 ---
 
@@ -30,15 +30,15 @@ LightNum uses a canonical 3-component `(m, e, l)` model where `m` is the signed 
 
 | Layer (`l`) | Value Representation | Range | Precision |
 | :--- | :--- | :--- | :--- |
-| `0` | $m$ | $(-10^{10}, -10^{-10}) \cup \{0\} \cup (10^{-10}, 10^{10})$ | Full 53-bit `f64` (~15–17 decimal digits) |
-| `1` | $m \times 10^{e}$ | $|m| \in [1, 10)$, $|e| \in [10, 2^{53}]$ | Full 53-bit `f64` (~15–17 decimal digits) |
-| `2` | $\text{sgn}(m) \times 10^{\pm 10^{|e|}}$ | Up to $10^{(10^{308})}$ | 53-bit exponent `e` |
-| $\ge 3$ | $\text{sgn}(m) \times (10\uparrow\uparrow l)^{|e|}$ | Up to $10\uparrow\uparrow(2^{1024})$ | Dominant-term arithmetic |
+| `0` | `m` | `(-10^10, -10^-10)`, `0`, `(10^-10, 10^10)` | Full 53-bit `f64` (~15–17 decimal digits) |
+| `1` | `m * 10^e` | `abs(m)` in `[1, 10)`, `abs(e)` in `[10, 2^53]` | Full 53-bit `f64` (~15–17 decimal digits) |
+| `2` | `sign(m) * 10^(±10^abs(e))` | Up to `10^(10^308)` | 53-bit exponent `e` |
+| `>= 3` | `sign(m) * (10^^l)^abs(e)` | Up to `10^^(2^1024)` | Dominant-term arithmetic |
 
 ### Internal Binary Formats
 
-- **25-Byte Native Buffer (Default):** Stores `sign` (`i8` at offset 0), `l` (`f64` at offset 1), `e` (`f64` at offset 9), and `m` (`f64` at offset 17). Avoids `log10` conversion overhead during arithmetic.
-- **17-Byte Legacy Buffer (GammaNum Wire Format):** Stores `sign` (`i8` at offset 0), `l17` (`f64` at offset 1), and `e17` (`f64` at offset 9). Fully interoperable with all LightNum functions and existing GammaNum saved data.
+- **25-Byte Native Buffer (Default):** Stores `sign` (`i8` at offset `0`), `l` (`f64` at offset `1`), `e` (`f64` at offset `9`), and `m` (`f64` at offset `17`). Avoids `log10` conversion overhead during arithmetic.
+- **17-Byte Legacy Buffer (GammaNum Wire Format):** Stores `sign` (`i8` at offset `0`), `l17` (`f64` at offset `1`), and `e17` (`f64` at offset `9`). Fully interoperable with all LightNum functions and existing GammaNum saved data.
 
 ### Luau Compiler Optimizations
 
@@ -51,9 +51,24 @@ LightNum uses a canonical 3-component `(m, e, l)` model where `m` is the signed 
 
 ## Installation
 
+### Option 1: Roblox Studio Model / Auto-Updating Package (Recommended)
+1. Download `LightNum.rbxm` from the [Releases](../../releases) page.
+2. Drag `LightNum.rbxm` into `ReplicatedStorage` inside Roblox Studio.
+3. Because the asset is configured as a Roblox Package, you can pull future updates directly through Studio's Package Manager.
+
+### Option 2: Wally
+Add LightNum to your `wally.toml`:
+
+```toml
+[dependencies]
+LightNum = "bugpt025-dot/lightnum@1.9.1"
+```
+
+### Option 3: Manual / Rojo
 1. Create a `ModuleScript` named `LightNum` inside `ReplicatedStorage`.
-2. Copy the contents of `LightNum.lua` into the `ModuleScript`.
-3. Require it in your server or client scripts:
+2. Copy the contents of `init.luau` (or `LightNum.luau`) into the `ModuleScript`.
+
+### Requiring the Module
 
 ```lua
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -120,7 +135,7 @@ local resultBuffer = ln.pack(m, e, l)
 
 ### 4. Structure-of-Arrays Batch Engine (`ln.SoA`)
 
-`LightNum.SoA` stores $N$ numbers across three contiguous `f64` buffers (`m`, `e`, `l`). Ideal for updating thousands of currency balances, damage ticks, or multipliers per frame with zero garbage collection pressure.
+`LightNum.SoA` stores `N` numbers across three contiguous `f64` buffers (`m`, `e`, `l`). Ideal for updating thousands of currency balances, damage ticks, or multipliers per frame with zero garbage collection pressure.
 
 ```lua
 local balances = ln.SoA.fromArray({ 100, 5000, "1e20", "1e100" })
@@ -138,7 +153,7 @@ local product = balances:prod()
 
 ### 5. Extended Hyper Layer Engine (`ln.Hyper`)
 
-For numbers exceeding standard `f64` layer indices ($l > 2^{53}$), `ln.Hyper` represents the layer counter as an arbitrary decimal string up to 400 digits while keeping IEEE-754 mantissa and exponent fields.
+For numbers exceeding standard `f64` layer indices (`l > 2^53`), `ln.Hyper` represents the layer counter as an arbitrary decimal string up to 400 digits while keeping IEEE-754 mantissa and exponent fields.
 
 ```lua
 local h1 = ln.Hyper.fromParts(1, 500, "1000000000000000000000000")
@@ -211,54 +226,5 @@ local restoredCash = ln.lbdecode(score)
 ### Notation Functions
 
 - `ln.tostring(n, suffixType?, intRound?)`: Formats according to `ln.DefaultSuffixType` (or an explicit `ln.SuffixTypes` enum).
-- `ln.toSuffix(n)`: Standard incremental suffixes (`k`, `M`, `B`, `T`, `Qd`, `Qt`, `Sx`, `Sp`, `Oc`, `No`, up to `NoNi` and `Mi` at $10^{3003}$). Uses `1/` prefix for small values ($< 10^{-3}$).
+- `ln.toSuffix(n)`: Standard incremental suffixes (`k`, `M`, `B`, `T`, `Qd`, `Qt`, `Sx`, `Sp`, `Oc`, `No`, up to `NoNi` and `Mi` at `10^3003`). Uses `1/` prefix for small values (`< 10^-3`).
 - `ln.toScientific(n)`: Standard scientific notation (`1.234e56`, `e1.234e6`, or layered `1.234L+10` at high layers).
-- `ln.toEngineer(n)`: Engineering notation with exponents aligned to multiples of 3.
-- `ln.toLayered(n)`: Explicit layer notation (`1.234L+5`).
-- `ln.toHyper(n)`: Tetration/super-logarithm notation (`10^^4.1234`).
-
-### Runtime Configuration
-
-```lua
-ln.DefaultSuffixType = ln.SuffixTypes.Scientific306 -- Suffixes up to 1e306, then Scientific
-ln.DefaultDigits = 3                                -- Fractional digits in Scientific/Layered modes
-ใช้โค้ดอย่างระมัดระวัง
-ln.DefaultTotalDigits = 3                           -- Total significant digits in Suffix/Engineer modes
-ln.MaxEs = 3                                        -- Max 'e' chain length (e.g., eee10) before Layered mode
-```
-Available ln.SuffixTypes:
-Scientific, Scientific3, Scientific36, Scientific306, Scientific3006, Engineer, Engineer3, Engineer36, Engineer306, Engineer3006, Layered.
-
-Complete API Reference
-
-
-Constructors and Inspection
-
-• Constructors: new(s, l, e), createCheckless(s, l, e), fromNumber(n), fromScientific(m, e), fromString(str), fromTuple(s, l, e), fromTable(tbl), fromVector(v), wrap(n) (fast, obj), clone(n)
-• Constants: ln.Constants.Zero, One, Two, Ten, E, Pi, Googol, Googolplex, Inf, NegInf, NaN, MaxNumber
-• Predicates: isLightNum(n), isGammaNum(n), isWrapped(n), isTable(n), isPositive(n), isNegative(n), isZero(n), isNaN(n), isInf(n), isFinite(n), isNumber(n)
-• Conversion: toNumber(n), totuple(n) (toTuple, unpack), toTable(n), tobuffer(n), tobuffer17(n), toVector(n), show(n), showS(n), showPrecise(n), showPreciseS(n)
-
-Arithmetic and Functions
-
-• Basic: add(a, b), sub(a, b), mul(a, b), div(a, b), fma(a, b, c), intdiv(a, b), mod(a, b), recip(n), abs(n), neg(n), sign(n)
-• Destination-Buffer: addInto(outBuf, a, b), mulInto(outBuf, a, b)
-• In-Place Mutators: set, setFromBuffer, setFromNumber, writeTuple, copy, addeq, subeq, muleq, diveq, fmaeq, intdiveq, modeq, recipeq, abseq, negeq, poweq, rooteq, sqrteq, cbrteq, pow2eq, pow10eq, expeq, logeq, log10eq, abslog10eq, log2eq, lneq, tetreq, flooreq, ceileq, roundeq, roundtoeq, gammaeq, facteq, lerpeq, randomeq, geosumeq, geosumReq
-• Powers and Logarithms: pow(a, b), root(a, b), sqrt(n), cbrt(n), pow2(n), pow10(n) (exp10), exp(n), log(n, base), log10(n), abslog10(n), log2(n), ln(n), tetr(base, height), slog(n, base?)
-• Rounding and Combinatorics: floor(n), ceil(n), round(n), roundto(n, step), gamma(n), fact(n)
-• Comparison and Clamping: compare(a, b), eq(a, b), lt(a, b), lte(a, b), gt(a, b), gte(a, b), max(...), min(...), maxabs(...), minabs(...), maxeq, mineq, maxabseq, minabseq, clamp(n, min, max), clampeq(n, min, max)
-• Batch and Interpolation: sum(...), prod(...), sumArray(arr), prodArray(arr), lerp(a, b, t), invLerp(a, b, v), logLerp(a, b, t), hypot(a, b), random(min, max), geosum, geosumR, costBulk, maxBuy
-
-Sub-Namespaces
-
-• ln.Tuple: normalize, fromNumber, fromScientific, fromString, fromBuffer, toBuffer, toBuffer17, writeBuffer, unpack, toNumber, toScientific, toVector, fromVector, add, sub, mul, div, fma, intdiv, mod, neg, abs, recip, pow, root, sqrt, cbrt, pow2, pow10, exp, log, log10, abslog10, log2, ln, tetr, slog, floor, ceil, round, gamma, fact, geosum, geosumR, compare, eq, lt, lte, gt, gte (plus top-level addT, subT, mulT, divT, fmaT, powT, sqrtT, log10T, lnT, expT, eqT, ltT, lteT, gtT, gteT)
-• ln.SoA: new(count), fromArray(arr), getTuple(soa, idx), getBuffer(soa, idx), setTuple(soa, idx, m, e, l), set(soa, idx, val), addScalar, subScalar, mulScalar, divScalar, fmaScalar, add, mul, fma, sumT, sum, prodT, prod
-• ln.Hyper: is(x), from(x), fromParts(m, e, layer), layer(x), totuple(x), addLayerIndex(a, b), subtractLayerIndex(a, b), raiseLayer(x, delta), sign(x), compare, eq, lt, lte, gt, gte, add, sub, mul, div, pow, toLightNum, toTable, serialize, deserialize, toString
-
-<FollowUp>
-If you'd like to expand or adjust anything further, let me know:
-* Whether you want **string parsing syntax examples** (e.g., `"1.5e100"`, `"eee10"`, `"10^^5"`, `"2;500"`) documented
-* If you want a **Migrating from GammaNum** section showing side-by-side compatibility
-
-I can add those sections directly into the README.
-</FollowUp>
