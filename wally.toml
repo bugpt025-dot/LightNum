@@ -1,0 +1,10 @@
+[package]
+name = "bugpt025-dot/lightnum"
+description = "A native Luau arbitrary-magnitude number library for Roblox."
+version = "1.9.1"
+license = "MIT"
+authors = ["bugpt025-dot"]
+registry = "https://github.com"
+realm = "shared"
+
+[dependencies]
